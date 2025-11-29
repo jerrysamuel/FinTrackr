@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.db.models import Sum, Count, Q
 from django.db.models.functions import TruncMonth
+from rest_framework import serializers as drf_serializers
 from datetime import datetime, timedelta
 from .models import Expense, Category, CategoryRule, Budget
 from drf_spectacular.utils import (
@@ -656,6 +657,9 @@ class ExpenseViewSet(viewsets.ModelViewSet):
                 {'error': 'Category not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
+        
+
+@extend_schema(tags=['Budgets'])
 class BudgetViewSet(viewsets.ModelViewSet):
     """Budget CRUD"""
     serializer_class = BudgetSerializer
@@ -666,9 +670,242 @@ class BudgetViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+    
+    @extend_schema(
+        summary='List all budgets',
+        description="""
+        Retrieve all budget limits for the authenticated user.
+        
+        Each budget includes:
+        - Monthly spending limit for a specific category
+        - Amount spent so far in the current month
+        - Remaining budget
+        - Status (over/under budget)
+        """,
+        responses={
+            200: BudgetSerializer(many=True),
+            401: OpenApiResponse(description='Authentication required'),
+        },
+        examples=[
+            OpenApiExample(
+                'Budget list response',
+                value=[
+                    {
+                        'id': 1,
+                        'category': 2,
+                        'category_name': 'Food & Dining',
+                        'amount': 500.00,
+                        'month': '2024-01-01',
+                        'spent': 350.00,
+                        'remaining': 150.00,
+                        'is_over_budget': False,
+                        'created_at': '2024-01-01T10:00:00Z'
+                    },
+                    {
+                        'id': 2,
+                        'category': 3,
+                        'category_name': 'Transportation',
+                        'amount': 200.00,
+                        'month': '2024-01-01',
+                        'spent': 225.00,
+                        'remaining': -25.00,
+                        'is_over_budget': True,
+                        'created_at': '2024-01-01T10:00:00Z'
+                    }
+                ],
+                response_only=True
+            )
+        ]
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+    
+    @extend_schema(
+        summary='Create budget',
+        description="""
+        Create a monthly budget limit for a specific category.
+        
+        ## Notes
+        - Month should be the first day of the month (e.g., 2024-01-01)
+        - Cannot create duplicate budgets for same category + month
+        - Budget automatically tracks spending in real-time
+        """,
+        request=BudgetSerializer,
+        responses={
+            201: BudgetSerializer,
+            400: OpenApiResponse(
+                description='Invalid data or duplicate budget',
+                examples=[
+                    OpenApiExample(
+                        'Duplicate budget error',
+                        value={
+                            'non_field_errors': [
+                                'Budget with this User, Category and Month already exists.'
+                            ]
+                        }
+                    )
+                ]
+            ),
+        },
+        examples=[
+            OpenApiExample(
+                'Create budget example',
+                value={
+                    'category': 2,
+                    'amount': 500.00,
+                    'month': '2024-01-01'
+                },
+                request_only=True
+            )
+        ]
+    )
+    def create(self, request, *args, **kwargs):
+        return super().create(request, *args, **kwargs)
+    
+    @extend_schema(
+        summary='Get budget detail',
+        description='Retrieve details of a specific budget including current spending status.',
+        responses={
+            200: BudgetSerializer,
+            404: OpenApiResponse(description='Budget not found'),
+        }
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
+    
+    @extend_schema(
+        summary='Update budget',
+        description='Update an existing budget limit (partial update supported).',
+        request=BudgetSerializer,
+        responses={
+            200: BudgetSerializer,
+            400: OpenApiResponse(description='Invalid data'),
+            404: OpenApiResponse(description='Budget not found'),
+        },
+        examples=[
+            OpenApiExample(
+                'Update budget amount',
+                value={
+                    'amount': 600.00
+                },
+                request_only=True
+            )
+        ]
+    )
+    def partial_update(self, request, *args, **kwargs):
+        return super().partial_update(request, *args, **kwargs)
+    
+    @extend_schema(
+        summary='Delete budget',
+        description='Delete a budget permanently.',
+        responses={
+            204: OpenApiResponse(description='Budget deleted successfully'),
+            404: OpenApiResponse(description='Budget not found'),
+        }
+    )
+    def destroy(self, request, *args, **kwargs):
+        return super().destroy(request, *args, **kwargs)
 
 
+# ============================================
 # Analytics Views
+# ============================================
+
+@extend_schema(
+    tags=['Analytics'],
+    summary='Financial summary',
+    description="""
+    Get overall financial summary for the authenticated user.
+    
+    ## Data Returned
+    - **Period**: Date range for the summary (defaults to current month)
+    - **Total Income**: Sum of all CREDIT transactions
+    - **Total Expenses**: Sum of all DEBIT transactions
+    - **Net Balance**: Income minus expenses
+    - **Transaction Count**: Total number of transactions
+    
+    ## Date Range
+    By default, shows current month (from 1st to today).
+    Use query parameters to customize the date range.
+    """,
+    parameters=[
+        OpenApiParameter(
+            name='start_date',
+            type=OpenApiTypes.DATE,
+            location=OpenApiParameter.QUERY,
+            description='Start date for summary (YYYY-MM-DD). Defaults to first day of current month.',
+            required=False,
+            examples=[
+                OpenApiExample('Current year', value='2024-01-01'),
+                OpenApiExample('Last 30 days', value='2024-01-01'),
+            ]
+        ),
+        OpenApiParameter(
+            name='end_date',
+            type=OpenApiTypes.DATE,
+            location=OpenApiParameter.QUERY,
+            description='End date for summary (YYYY-MM-DD). Defaults to today.',
+            required=False,
+            examples=[
+                OpenApiExample('Today', value='2024-01-31'),
+            ]
+        ),
+    ],
+    responses={
+        200: OpenApiResponse(
+            response=inline_serializer(
+                name='AnalyticsSummaryResponse',
+                fields={
+                    'period': drf_serializers.DictField(
+                        help_text='Date range for the summary'
+                    ),
+                    'total_income': drf_serializers.FloatField(
+                        help_text='Sum of all credit transactions'
+                    ),
+                    'total_expenses': drf_serializers.FloatField(
+                        help_text='Sum of all debit transactions'
+                    ),
+                    'net_balance': drf_serializers.FloatField(
+                        help_text='Income minus expenses'
+                    ),
+                    'transaction_count': drf_serializers.IntegerField(
+                        help_text='Total number of transactions'
+                    ),
+                }
+            ),
+            description='Summary data retrieved successfully',
+            examples=[
+                OpenApiExample(
+                    'Summary example',
+                    value={
+                        'period': {
+                            'start': '2024-01-01',
+                            'end': '2024-01-31'
+                        },
+                        'total_income': 5000.00,
+                        'total_expenses': 2500.00,
+                        'net_balance': 2500.00,
+                        'transaction_count': 45
+                    }
+                ),
+                OpenApiExample(
+                    'Over budget month',
+                    value={
+                        'period': {
+                            'start': '2024-01-01',
+                            'end': '2024-01-31'
+                        },
+                        'total_income': 3000.00,
+                        'total_expenses': 3500.00,
+                        'net_balance': -500.00,
+                        'transaction_count': 62
+                    }
+                )
+            ]
+        ),
+        401: OpenApiResponse(description='Authentication required'),
+    }
+)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def analytics_summary(request):
@@ -676,8 +913,18 @@ def analytics_summary(request):
     user = request.user
     
     # Get date range from query params or default to current month
-    end_date = datetime.now().date()
-    start_date = end_date.replace(day=1)
+    end_date = request.query_params.get('end_date')
+    start_date = request.query_params.get('start_date')
+    
+    if not end_date:
+        end_date = datetime.now().date()
+    else:
+        end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+    
+    if not start_date:
+        start_date = end_date.replace(day=1)
+    else:
+        start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
     
     debits = Expense.objects.filter(
         user=user,
@@ -709,6 +956,96 @@ def analytics_summary(request):
     })
 
 
+@extend_schema(
+    tags=['Analytics'],
+    summary='Category breakdown',
+    description="""
+    Get spending or income breakdown by category.
+    
+    ## Use Cases
+    - See which categories consume the most budget
+    - Identify top spending categories
+    - Track income sources by category
+    - Visualize data in pie charts or bar graphs
+    
+    ## Data Returned
+    Array of categories with:
+    - Category name and color
+    - Total amount spent/earned
+    - Number of transactions
+    - Sorted by total (highest first)
+    """,
+    parameters=[
+        OpenApiParameter(
+            name='type',
+            type=OpenApiTypes.STR,
+            location=OpenApiParameter.QUERY,
+            description='Transaction type to analyze',
+            enum=['DEBIT', 'CREDIT'],
+            default='DEBIT',
+            required=False,
+            examples=[
+                OpenApiExample('Spending breakdown', value='DEBIT'),
+                OpenApiExample('Income sources', value='CREDIT'),
+            ]
+        ),
+        OpenApiParameter(
+            name='start_date',
+            type=OpenApiTypes.DATE,
+            location=OpenApiParameter.QUERY,
+            description='Filter from date (YYYY-MM-DD)',
+            required=False,
+        ),
+        OpenApiParameter(
+            name='end_date',
+            type=OpenApiTypes.DATE,
+            location=OpenApiParameter.QUERY,
+            description='Filter to date (YYYY-MM-DD)',
+            required=False,
+        ),
+    ],
+    responses={
+        200: OpenApiResponse(
+            response=inline_serializer(
+                name='CategoryBreakdownResponse',
+                fields={
+                    'category__name': drf_serializers.CharField(),
+                    'category__color': drf_serializers.CharField(),
+                    'total': drf_serializers.FloatField(),
+                    'count': drf_serializers.IntegerField(),
+                },
+                many=True
+            ),
+            description='Category breakdown data',
+            examples=[
+                OpenApiExample(
+                    'Spending by category',
+                    value=[
+                        {
+                            'category__name': 'Food & Dining',
+                            'category__color': '#ef4444',
+                            'total': 450.00,
+                            'count': 15
+                        },
+                        {
+                            'category__name': 'Transportation',
+                            'category__color': '#3b82f6',
+                            'total': 320.00,
+                            'count': 22
+                        },
+                        {
+                            'category__name': 'Entertainment',
+                            'category__color': '#8b5cf6',
+                            'total': 180.00,
+                            'count': 8
+                        }
+                    ]
+                )
+            ]
+        ),
+        401: OpenApiResponse(description='Authentication required'),
+    }
+)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def analytics_by_category(request):
@@ -716,11 +1053,22 @@ def analytics_by_category(request):
     user = request.user
     transaction_type = request.query_params.get('type', 'DEBIT')
     
-    data = Expense.objects.filter(
+    queryset = Expense.objects.filter(
         user=user,
         transaction_type=transaction_type,
         category__isnull=False
-    ).values(
+    )
+    
+    # Optional date filters
+    start_date = request.query_params.get('start_date')
+    end_date = request.query_params.get('end_date')
+    
+    if start_date:
+        queryset = queryset.filter(date__gte=start_date)
+    if end_date:
+        queryset = queryset.filter(date__lte=end_date)
+    
+    data = queryset.values(
         'category__name', 'category__color'
     ).annotate(
         total=Sum('amount'),
@@ -730,6 +1078,104 @@ def analytics_by_category(request):
     return Response(list(data))
 
 
+@extend_schema(
+    tags=['Analytics'],
+    summary='Monthly trends',
+    description="""
+    Get monthly spending and income trends over time.
+    
+    ## Use Cases
+    - Track spending patterns over months
+    - Compare income vs expenses month-by-month
+    - Visualize trends in line charts
+    - Identify seasonal spending patterns
+    
+    ## Data Returned
+    Array of monthly data points with:
+    - Month (first day of each month)
+    - Transaction type (DEBIT/CREDIT)
+    - Total amount for that month and type
+    - Ordered chronologically
+    
+    ## Chart Example
+    Use this data to create dual-line charts showing:
+    - Red line: Monthly expenses (DEBIT)
+    - Green line: Monthly income (CREDIT)
+    """,
+    parameters=[
+        OpenApiParameter(
+            name='months',
+            type=OpenApiTypes.INT,
+            location=OpenApiParameter.QUERY,
+            description='Number of months to retrieve (defaults to 6)',
+            default=6,
+            required=False,
+            examples=[
+                OpenApiExample('Last 3 months', value=3),
+                OpenApiExample('Last 6 months', value=6),
+                OpenApiExample('Last year', value=12),
+            ]
+        ),
+    ],
+    responses={
+        200: OpenApiResponse(
+            response=inline_serializer(
+                name='MonthlyTrendsResponse',
+                fields={
+                    'month': drf_serializers.DateField(
+                        help_text='First day of the month'
+                    ),
+                    'transaction_type': drf_serializers.ChoiceField(
+                        choices=['DEBIT', 'CREDIT']
+                    ),
+                    'total': drf_serializers.FloatField(
+                        help_text='Total amount for this month and type'
+                    ),
+                },
+                many=True
+            ),
+            description='Monthly trend data',
+            examples=[
+                OpenApiExample(
+                    'Monthly trends example',
+                    value=[
+                        {
+                            'month': '2023-11-01',
+                            'transaction_type': 'DEBIT',
+                            'total': 2300.00
+                        },
+                        {
+                            'month': '2023-11-01',
+                            'transaction_type': 'CREDIT',
+                            'total': 5000.00
+                        },
+                        {
+                            'month': '2023-12-01',
+                            'transaction_type': 'DEBIT',
+                            'total': 2800.00
+                        },
+                        {
+                            'month': '2023-12-01',
+                            'transaction_type': 'CREDIT',
+                            'total': 5000.00
+                        },
+                        {
+                            'month': '2024-01-01',
+                            'transaction_type': 'DEBIT',
+                            'total': 2500.00
+                        },
+                        {
+                            'month': '2024-01-01',
+                            'transaction_type': 'CREDIT',
+                            'total': 5200.00
+                        }
+                    ]
+                )
+            ]
+        ),
+        401: OpenApiResponse(description='Authentication required'),
+    }
+)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def analytics_by_month(request):
