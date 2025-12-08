@@ -32,6 +32,47 @@ class ExpenseSerializer(serializers.ModelSerializer):
         read_only_fields = ['created_at', 'updated_at']
 
 
+class CategoryAnalyticsSerializer(serializers.Serializer):
+    """Analytics grouped by category"""
+    category_name = serializers.CharField()
+    category_id = serializers.IntegerField(allow_null=True)
+    total_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    transaction_count = serializers.IntegerField()
+    percentage = serializers.DecimalField(max_digits=5, decimal_places=2)
+    avg_transaction = serializers.DecimalField(max_digits=10, decimal_places=2)
+
+
+class MonthlyAnalyticsSerializer(serializers.Serializer):
+    """Analytics grouped by month"""
+    month = serializers.CharField()
+    year = serializers.IntegerField()
+    total_income = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_expenses = serializers.DecimalField(max_digits=12, decimal_places=2)
+    net_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    transaction_count = serializers.IntegerField()
+
+
+class AnalyticsSummarySerializer(serializers.Serializer):
+    """Overall analytics summary"""
+    total_income = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_expenses = serializers.DecimalField(max_digits=12, decimal_places=2)
+    net_balance = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_transactions = serializers.IntegerField()
+    
+    # Category breakdown
+    top_expense_category = serializers.CharField(allow_null=True)
+    top_expense_amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    
+    # Time period
+    period_start = serializers.DateField(allow_null=True)
+    period_end = serializers.DateField(allow_null=True)
+    
+    # Budget info
+    total_budget = serializers.DecimalField(max_digits=12, decimal_places=2)
+    budget_remaining = serializers.DecimalField(max_digits=12, decimal_places=2)
+    budget_utilization = serializers.DecimalField(max_digits=5, decimal_places=2)
+
+
 class BudgetSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
     spent = serializers.SerializerMethodField()
