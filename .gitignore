@@ -25,3 +25,12 @@ env/
 /env
 .env
 env
+/staticfiles/
+/media/*
+!/media/.gitkeep
+!/static/.gitkeep
+/db.sqlite3
+*.log
+.DS_Store
+__pycache__/
+*.pyc
