@@ -13,6 +13,8 @@ ENV/
 .gitignore
 .dockerignore
 .env
+.env.prod
+.env.dev
 .vscode
 .idea
 *.md

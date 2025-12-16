@@ -12,8 +12,12 @@ from decimal import Decimal
 from openai import OpenAI
 import json
 from decouple import config 
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
-api_key = config("APIKEY_OPENAI")
+
+api_key = os.getenv("APIKEY_OPENAI")
 
 
 

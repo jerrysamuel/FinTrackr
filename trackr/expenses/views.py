@@ -19,15 +19,21 @@ from .serializers import (
 from .services.etl_service import ETLService
 from drf_spectacular.utils import extend_schema
 import logging
-from decouple import config 
+import os
+from dotenv import load_dotenv
+from rest_framework.throttling import UserRateThrottle
+from rest_framework.decorators import api_view, throttle_classes
+
+class BurstThrottle(UserRateThrottle):
+    rate = "10/hour"
+load_dotenv()
+
+
 
 # Get logger for this module
 logger = logging.getLogger(__name__)
 
-api_key = config('OPENAI_API_KEY', default='')
-# ============================================
-# Category Views
-# ============================================
+api_key = os.getenv("APIKEY_OPENAI", "")
 
 class CategoryViewSet(viewsets.ModelViewSet):
     """Category CRUD - Returns default categories + user's custom categories"""
@@ -55,18 +61,11 @@ class CategoryRuleViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
 
-# ============================================
-# Expense Views
-# ============================================
-
 class ExpenseViewSet(viewsets.ModelViewSet):
-    """
-    Expense CRUD + File Upload
     
-    Filters: ?type=DEBIT&category=1&start_date=2024-01-01&end_date=2024-01-31
-    """
     serializer_class = ExpenseSerializer
     permission_classes = [IsAuthenticated]
+    throttle_classes = [UserRateThrottle]
     
     def get_queryset(self):
         queryset = Expense.objects.filter(user=self.request.user)
@@ -122,7 +121,10 @@ class ExpenseViewSet(viewsets.ModelViewSet):
     description='Upload CSV/Excel file for bulk import. Returns preview of transactions with auto-categorization.',
     summary='Bulk upload bank statement'
 )
-    @action(detail=False, methods=['post'], parser_classes=[parsers.MultiPartParser, parsers.FormParser])
+
+
+    
+    @action(detail=False, methods=['post'], throttle_classes=[BurstThrottle], parser_classes=[parsers.MultiPartParser, parsers.FormParser])
     def upload(self, request):
         file = request.FILES.get('file')
         if not file:
@@ -141,7 +143,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
             
             # Get Groq API key
             try:
-                api_key = config("APIKEY_OPENAI")
+                api_key = os.getenv("APIKEY_OPENAI")
                 print(f"✓ API key loaded")
             except Exception as e:
                 logger.warning(f"Could not load Groq API key: {e}")
