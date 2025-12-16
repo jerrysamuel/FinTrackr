@@ -24,6 +24,8 @@ env/
 /env
 /env
 .env
+.env.prod
+.env.dev
 env
 /staticfiles/
 /media/*
