@@ -14,6 +14,7 @@ services:
       - "8000:8000"
     depends_on:
       - redis
+  image: ghcr.io/jerrysamuel/trackr-backend:latest
 
   redis:
     image: redis:7-alpine
