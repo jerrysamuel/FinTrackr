@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir /wheels/*
 COPY . .
 RUN useradd -m appuser && chown -R appuser /app
 USER appuser
+RUN mkdir -p /app/staticfiles && chown -R appuser /app/staticfiles
 EXPOSE 8000
 CMD ["gunicorn", "trackr.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3"]
 
