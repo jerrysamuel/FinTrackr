@@ -9,7 +9,7 @@ RUN pip wheel --no-cache-dir --no-deps -r requirements.txt -w /wheels
 FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV DJANGO_SETTINGS_MODULE=trackr.settings
+ENV DJANGO_SETTINGS_MODULE=trackr.trackr.settings
 ENV PYTHONPATH=/app
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev curl && rm -rf /var/lib/apt/lists/*
