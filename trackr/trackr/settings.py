@@ -48,8 +48,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
-    'trackr.users',
-    'trackr.expenses',
+    'users',
+    'expenses',
     'drf_spectacular',
 
 ]
