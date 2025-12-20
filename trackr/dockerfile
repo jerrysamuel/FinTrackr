@@ -9,7 +9,7 @@ RUN pip wheel --no-cache-dir --no-deps -r requirements.txt -w /wheels
 FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV DJANGO_SETTINGS_MODULE=trackr.settings
+ENV DJANGO_SETTINGS_MODULE=trackr.trackr.settings
 ENV PYTHONPATH=/app/trackr
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev curl && rm -rf /var/lib/apt/lists/*
@@ -20,5 +20,9 @@ RUN useradd -m appuser && chown -R appuser /app
 USER appuser
 RUN mkdir -p /app/staticfiles && chown -R appuser /app/staticfiles
 EXPOSE 8000
-CMD ["gunicorn", "trackr.wsgi:application", "--bind", "0.0.0.0:${PORT}", "--workers", "3"]
 
+CMD sh -c "\
+mkdir -p /app/staticfiles && \
+python manage.py collectstatic --noinput && \
+gunicorn trackr.trackr.wsgi:application --bind 0.0.0.0:$PORT --workers 3 \
+"
