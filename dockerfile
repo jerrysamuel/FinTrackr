@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir /wheels/*
 COPY . .
 RUN useradd -m appuser && chown -R appuser /app
 USER appuser
-RUN mkdir -p /app/staticfiles && chown -R appuser /app/staticfiles
+# RUN mkdir -p /app/staticfiles && chown -R appuser /app/staticfiles
 EXPOSE 8000
 
 RUN chmod +x /app/entrypoint.sh
