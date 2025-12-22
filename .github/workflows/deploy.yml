@@ -28,6 +28,6 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./trackr/dockerfile
+          file: ./dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/trackr-backend:latest
