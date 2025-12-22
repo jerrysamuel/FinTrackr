@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import dj_database_url
 from dotenv import load_dotenv
+from corsheaders.defaults import default_headers
 
 load_dotenv()
 
@@ -35,6 +36,21 @@ DEBUG = os.getenv("DJANGO_DEBUG") == "True"
 
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
 
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8080",
+    "https://www.your-frontend-domain.com",
+]
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "authorization",
+    "content-type",
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:8080",
+    "https://trackr-backend-latest-2.onrender.com",
+]
+CORS_ALLOW_CREDENTIALS = True
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # Application definition
