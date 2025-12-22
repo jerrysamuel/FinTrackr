@@ -1,0 +1,29 @@
+# ---------- Builder ----------
+FROM python:3.11-slim AS builder
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev && rm -rf /var/lib/apt/lists/*
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV DJANGO_SETTINGS_MODULE=trackr.settings
+COPY requirements.txt .
+RUN pip wheel --no-cache-dir --no-deps -r requirements.txt -w /wheels
+
+# ---------- Runtime ----------
+FROM python:3.11-slim
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV DJANGO_SETTINGS_MODULE=trackr.settings
+ENV PYTHONPATH=/app/
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev curl && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /wheels /wheels
+RUN pip install --no-cache-dir /wheels/*
+COPY . .
+RUN useradd -m appuser && chown -R appuser /app
+USER appuser
+RUN mkdir -p /app/staticfiles && chown -R appuser /app/staticfiles
+EXPOSE 8000
+
+RUN chmod +x /app/entrypoint.sh
+
+CMD ["/app/entrypoint.sh"]
