@@ -65,7 +65,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
     
     serializer_class = ExpenseSerializer
     permission_classes = [IsAuthenticated]
-    throttle_classes = [UserRateThrottle]
+    
     
     def get_queryset(self):
         queryset = Expense.objects.filter(user=self.request.user)
@@ -124,7 +124,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
 
 
     
-    @action(detail=False, methods=['post'], throttle_classes=[BurstThrottle], parser_classes=[parsers.MultiPartParser, parsers.FormParser])
+    @action(detail=False, methods=['post'], parser_classes=[parsers.MultiPartParser, parsers.FormParser])
     def upload(self, request):
         file = request.FILES.get('file')
         if not file:
