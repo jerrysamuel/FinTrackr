@@ -19,21 +19,19 @@ from .serializers import (
 from .services.etl_service import ETLService
 from drf_spectacular.utils import extend_schema
 import logging
-import os
-from dotenv import load_dotenv
+from django.conf import settings
 from rest_framework.throttling import UserRateThrottle
 from rest_framework.decorators import api_view, throttle_classes
 
 class BurstThrottle(UserRateThrottle):
     rate = "10/hour"
-load_dotenv()
 
 
 
 # Get logger for this module
 logger = logging.getLogger(__name__)
 
-api_key = os.getenv("APIKEY_OPENAI", "")
+api_key = settings.APIKEY_OPENAI
 
 class CategoryViewSet(viewsets.ModelViewSet):
     """Category CRUD - Returns default categories + user's custom categories"""
@@ -143,7 +141,7 @@ class ExpenseViewSet(viewsets.ModelViewSet):
             
             # Get Groq API key
             try:
-                api_key = os.getenv("APIKEY_OPENAI")
+                api_key = settings.APIKEY_OPENAI
                 print(f"✓ API key loaded")
             except Exception as e:
                 logger.warning(f"Could not load Groq API key: {e}")

@@ -12,12 +12,10 @@ from decimal import Decimal
 from openai import OpenAI
 import json
 from decouple import config 
-import os
-from dotenv import load_dotenv
-load_dotenv()
+from django.conf import settings
 
 
-api_key = os.getenv("APIKEY_OPENAI")
+api_key = settings.APIKEY_OPENAI
 
 
 
