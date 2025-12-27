@@ -54,7 +54,8 @@ class ETLService:
             raise ValueError(f"File extraction failed: {str(exc)}")
 
     @staticmethod
-    def transform(df: pd.DataFrame, column_mapping: Dict[str, str], api_key: str = None) -> Tuple[List[Dict[str, Any]], Set[str]]:
+    def transform(df: pd.DataFrame, column_mapping: Dict[str, str], api_key: str = api_key) -> Tuple[List[Dict[str, Any]], Set[str]]:
+        
         try:
             # rename based on mapping (original -> standardized)
             df = df.rename(columns=column_mapping)
@@ -86,6 +87,11 @@ class ETLService:
             # Clean each column
             df = ETLService._clean_dates(df)
             df = ETLService._clean_amounts(df)
+            print("\n=== AMOUNTS BEFORE CLASSIFICATION ===")
+            print(df[['description', 'amount']].head(10))
+            print(f"Negative amounts: {(df['amount'] < 0).sum()}")
+            print(f"Positive amounts: {(df['amount'] > 0).sum()}")
+            
             df = ETLService._clean_descriptions(df)
 
             # Infer categories using LLM if no category column and api_key provided
@@ -95,10 +101,14 @@ class ETLService:
                 else:
                     df['category'] = 'Uncategorized'
 
+            df = ETLService._classify_transactions(df)
+            print("\n=== AFTER CLASSIFICATION ===")
+            print(df[['description', 'amount', 'transaction_type']].head(10))
+            print(f"DEBIT: {(df['transaction_type'] == 'DEBIT').sum()}")
+            print(f"CREDIT: {(df['transaction_type'] == 'CREDIT').sum()}")
+    
             if 'category' in df.columns:
                 df = ETLService._clean_categories(df)
-
-            df = ETLService._classify_transactions(df)
 
             # Final: remove any rows missing critical fields
             df = df.dropna(subset=['date', 'amount', 'description'])
@@ -348,26 +358,45 @@ class ETLService:
 
     @staticmethod
     def _classify_transactions(df: pd.DataFrame) -> pd.DataFrame:
-        """ Classify transactions as CREDIT or DEBIT.
-        Flexible rule: positive amounts → CREDIT, negative → DEBIT.
-        Then store absolute amount and a transaction_type column.
         """
-        def ttype(x):
-            try:
-                x = float(x)
-            except Exception:
-                return None
-            if x > 0:
+        Classify transactions based on description keywords.
+        Most banks show all amounts as positive, so we infer from context.
+        """
+        def classify(row):
+            description = str(row.get('description', '')).lower()
+            category = str(row.get('category', '')).lower()
+            
+            # CREDIT indicators (income/deposits)
+            credit_keywords = [
+                'payment received',
+                'card payment received',
+                'salary',
+                'income',
+                'deposit',
+                'refund',
+                'cash deposit',
+                'transfer in',
+                'credit',
+                'reversal',
+                'cashback',
+                'interest',
+                'dividend',
+            ]
+            
+            # Check if it's income
+            if any(keyword in description for keyword in credit_keywords):
                 return 'CREDIT'
-            elif x < 0:
-                return 'DEBIT'
-            else:
-                return 'NEUTRAL'
-
-        df['transaction_type'] = df['amount'].apply(ttype)
-        # Convert amount to absolute for storage (keep type to know direction)
-        df['amount'] = df['amount'].abs()
-        # optionally drop NEUTRAL if undesired
+            
+            # Check category for income
+            if 'income' in category or 'salary' in category:
+                return 'CREDIT'
+            
+            # Everything else is an expense (DEBIT)
+            return 'DEBIT'
+        
+        df['transaction_type'] = df.apply(classify, axis=1)
+        
+        # Amounts stay positive (we're storing absolute values)
         return df
     
     @staticmethod
