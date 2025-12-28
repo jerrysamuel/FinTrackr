@@ -279,33 +279,36 @@ class ExpenseViewSet(viewsets.ModelViewSet):
 
 # ============================================
 # Analytics Views
-# ============================================
+#
 class AnalyticsViewSet(viewsets.ViewSet):
     """Analytics endpoints for expenses and budgets"""
     permission_classes = [IsAuthenticated]
     
     def get_date_range(self, request):
-        """Parse date range from query params"""
+        """
+        Parse date range from query params.
+        If no dates provided, return ALL data (no filtering).
+        """
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')
         
+        # Only set dates if explicitly provided
         if start_date:
             start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
         else:
-            # Default to last 6 months
-            start_date = date.today() - relativedelta(months=6)
+            start_date = None  # No filtering - get all data
         
         if end_date:
             end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
         else:
-            end_date = date.today()
+            end_date = None  # No filtering - get all data
         
         return start_date, end_date
     
     @extend_schema(
         parameters=[
-            OpenApiParameter('start_date', OpenApiTypes.DATE, description='Start date (YYYY-MM-DD)'),
-            OpenApiParameter('end_date', OpenApiTypes.DATE, description='End date (YYYY-MM-DD)'),
+            OpenApiParameter('start_date', OpenApiTypes.DATE, description='Start date (YYYY-MM-DD). Omit to get all data.'),
+            OpenApiParameter('end_date', OpenApiTypes.DATE, description='End date (YYYY-MM-DD). Omit to get all data.'),
             OpenApiParameter('transaction_type', OpenApiTypes.STR, description='DEBIT or CREDIT'),
         ],
         responses={200: CategoryAnalyticsSerializer(many=True)}
@@ -315,19 +318,23 @@ class AnalyticsViewSet(viewsets.ViewSet):
         """
         Get expense/income analytics grouped by category.
         Query params:
-        - start_date: Filter from date (YYYY-MM-DD)
-        - end_date: Filter to date (YYYY-MM-DD)
-        - transaction_type: DEBIT or CREDIT (optional)
+        - start_date: Filter from date (YYYY-MM-DD) - optional
+        - end_date: Filter to date (YYYY-MM-DD) - optional
+        - transaction_type: DEBIT or CREDIT - optional
+        
+        If no dates provided, returns ALL transactions.
         """
         start_date, end_date = self.get_date_range(request)
         transaction_type = request.query_params.get('transaction_type')
         
-        # Base query
-        queryset = Expense.objects.filter(
-            user=request.user,
-            date__gte=start_date,
-            date__lte=end_date
-        )
+        # Base query - all user's expenses
+        queryset = Expense.objects.filter(user=request.user)
+        
+        # Apply date filters only if provided
+        if start_date:
+            queryset = queryset.filter(date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(date__lte=end_date)
         
         # Filter by transaction type if specified
         if transaction_type in ['DEBIT', 'CREDIT']:
@@ -367,8 +374,8 @@ class AnalyticsViewSet(viewsets.ViewSet):
     
     @extend_schema(
         parameters=[
-            OpenApiParameter('start_date', OpenApiTypes.DATE, description='Start date (YYYY-MM-DD)'),
-            OpenApiParameter('end_date', OpenApiTypes.DATE, description='End date (YYYY-MM-DD)'),
+            OpenApiParameter('start_date', OpenApiTypes.DATE, description='Start date (YYYY-MM-DD). Omit to get all data.'),
+            OpenApiParameter('end_date', OpenApiTypes.DATE, description='End date (YYYY-MM-DD). Omit to get all data.'),
         ],
         responses={200: MonthlyAnalyticsSerializer(many=True)}
     )
@@ -377,17 +384,24 @@ class AnalyticsViewSet(viewsets.ViewSet):
         """
         Get expense/income analytics grouped by month.
         Query params:
-        - start_date: Filter from date (YYYY-MM-DD)
-        - end_date: Filter to date (YYYY-MM-DD)
+        - start_date: Filter from date (YYYY-MM-DD) - optional
+        - end_date: Filter to date (YYYY-MM-DD) - optional
+        
+        If no dates provided, returns ALL months with transactions.
         """
         start_date, end_date = self.get_date_range(request)
         
+        # Base query
+        queryset = Expense.objects.filter(user=request.user)
+        
+        # Apply date filters only if provided
+        if start_date:
+            queryset = queryset.filter(date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(date__lte=end_date)
+        
         # Get expenses grouped by month
-        expenses_by_month = Expense.objects.filter(
-            user=request.user,
-            date__gte=start_date,
-            date__lte=end_date
-        ).annotate(
+        expenses_by_month = queryset.annotate(
             month_date=TruncMonth('date')
         ).values('month_date').annotate(
             total_income=Sum('amount', filter=Q(transaction_type='CREDIT')),
@@ -416,32 +430,28 @@ class AnalyticsViewSet(viewsets.ViewSet):
     
     @extend_schema(
         parameters=[
-            OpenApiParameter('start_date', OpenApiTypes.DATE, description='Start date (YYYY-MM-DD)'),
-            OpenApiParameter('end_date', OpenApiTypes.DATE, description='End date (YYYY-MM-DD)'),
+            OpenApiParameter('start_date', OpenApiTypes.DATE, description='Start date (YYYY-MM-DD). Omit to get all data.'),
+            OpenApiParameter('end_date', OpenApiTypes.DATE, description='End date (YYYY-MM-DD). Omit to get all data.'),
             OpenApiParameter('month', OpenApiTypes.DATE, description='Specific month for budget comparison (YYYY-MM-01)'),
         ],
         responses={200: AnalyticsSummarySerializer}
     )
     @action(detail=False, methods=['get'])
     def summary(self, request):
-        """
-        Get overall analytics summary including budget information.
-        Query params:
-        - start_date: Filter from date (YYYY-MM-DD)
-        - end_date: Filter to date (YYYY-MM-DD)
-        - month: Specific month for budget comparison (YYYY-MM-01)
-        """
+        
         start_date, end_date = self.get_date_range(request)
         
-        # Get all expenses in range
-        expenses = Expense.objects.filter(
-            user=request.user,
-            date__gte=start_date,
-            date__lte=end_date
-        )
+        # Base query
+        queryset = Expense.objects.filter(user=request.user)
+        
+        # Apply date filters only if provided
+        if start_date:
+            queryset = queryset.filter(date__gte=start_date)
+        if end_date:
+            queryset = queryset.filter(date__lte=end_date)
         
         # Calculate totals
-        totals = expenses.aggregate(
+        totals = queryset.aggregate(
             total_income=Sum('amount', filter=Q(transaction_type='CREDIT')),
             total_expenses=Sum('amount', filter=Q(transaction_type='DEBIT')),
             total_count=Count('id')
@@ -451,7 +461,7 @@ class AnalyticsViewSet(viewsets.ViewSet):
         expenses_total = totals['total_expenses'] or Decimal('0')
         
         # Top expense category
-        top_category = expenses.filter(
+        top_category = queryset.filter(
             transaction_type='DEBIT'
         ).values(
             'category__name'
@@ -485,6 +495,10 @@ class AnalyticsViewSet(viewsets.ViewSet):
         budget_remaining = total_budget - month_expenses
         budget_utilization = (month_expenses / total_budget * 100) if total_budget > 0 else Decimal('0')
         
+        # Determine actual date range used
+        actual_start = start_date if start_date else queryset.earliest('date').date if queryset.exists() else date.today()
+        actual_end = end_date if end_date else queryset.latest('date').date if queryset.exists() else date.today()
+        
         result = {
             'total_income': income,
             'total_expenses': expenses_total,
@@ -492,8 +506,8 @@ class AnalyticsViewSet(viewsets.ViewSet):
             'total_transactions': totals['total_count'],
             'top_expense_category': top_category['category__name'] if top_category else None,
             'top_expense_amount': top_category['total'] if top_category else Decimal('0'),
-            'period_start': start_date,
-            'period_end': end_date,
+            'period_start': actual_start,
+            'period_end': actual_end,
             'total_budget': total_budget,
             'budget_remaining': budget_remaining,
             'budget_utilization': round(budget_utilization, 2)
@@ -501,6 +515,7 @@ class AnalyticsViewSet(viewsets.ViewSet):
         
         serializer = AnalyticsSummarySerializer(result)
         return Response(serializer.data)
+
 
 
 class BudgetViewSet(viewsets.ModelViewSet):
