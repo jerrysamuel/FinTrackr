@@ -37,6 +37,7 @@ DEBUG = os.getenv("DJANGO_DEBUG") == "True"
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "*").split(",")
 
 CORS_ALLOWED_ORIGINS = [
+    "https://fintrackr-pfby.onrender.com",
     "http://localhost:8080",
     "https://www.your-frontend-domain.com",
 ]
@@ -47,6 +48,7 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
 ]
 
 CSRF_TRUSTED_ORIGINS = [
+    "https://fintrackr-pfby.onrender.com",
     "http://localhost:8080",
     "https://trackr-backend-latest-2.onrender.com",
 ]
